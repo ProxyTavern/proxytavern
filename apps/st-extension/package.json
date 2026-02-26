@@ -1,0 +1,6 @@
+{
+  "name": "@proxytavern/st-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SillyTavern extension scaffold for ProxyTavern endpoint exposure"
+}

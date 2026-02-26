@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  proxytavern:
+    image: node:22-bookworm
+    working_dir: /app
+    command: bash -lc "npm install && npm --workspace apps/proxytavern run start"
+    ports:
+      - "8787:8787"
+    environment:
+      - PORT=8787
+      - HOST=0.0.0.0
+      - UPSTREAM_URL=http://host.docker.internal:8000/v1/chat/completions
+    volumes:
+      - ./:/app

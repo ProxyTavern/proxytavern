@@ -1,0 +1,12 @@
+{
+  "name": "proxytavern",
+  "private": true,
+  "workspaces": [
+    "apps/proxytavern",
+    "apps/st-extension"
+  ],
+  "scripts": {
+    "dev": "npm --workspace apps/proxytavern run dev",
+    "start": "npm --workspace apps/proxytavern run start"
+  }
+}

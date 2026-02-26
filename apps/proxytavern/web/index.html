@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ProxyTavern Control Panel</title>
+    <style>
+      body { font-family: sans-serif; margin: 24px; }
+      textarea { width: 100%; min-height: 80px; }
+      pre { background: #111; color: #ddd; padding: 12px; overflow: auto; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      button { margin-right: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>ProxyTavern</h1>
+    <p>MVP control panel</p>
+    <div>
+      <button id="gen">Generate API Token</button>
+      <code id="token"></code>
+    </div>
+    <h3>Mode</h3>
+    <select id="mode">
+      <option value="inline">inline</option>
+      <option value="queued">queued</option>
+    </select>
+    <h3>Blocked JSONPaths (one per line)</h3>
+    <textarea id="paths" placeholder="$.messages[0].content"></textarea>
+    <div><button id="save">Save Config</button></div>
+    <h3>Recent Sessions</h3>
+    <div id="sessions"></div>
+    <script>
+      async function load() {
+        const cfg = await fetch('/api/config').then(r => r.json());
+        document.querySelector('#mode').value = cfg.mode || 'inline';
+        document.querySelector('#paths').value = (cfg.blockedJsonPaths || []).join('\n');
+        const sessions = await fetch('/api/sessions').then(r => r.json());
+        document.querySelector('#sessions').innerHTML = sessions.slice(0,5).map(s => `
+          <div class="row">
+            <pre>${JSON.stringify(s.incoming, null, 2)}</pre>
+            <pre>${JSON.stringify(s.transformed, null, 2)}</pre>
+          </div>
+        `).join('');
+      }
+      document.querySelector('#gen').onclick = async () => {
+        const r = await fetch('/api/token/generate', { method: 'POST' }).then(r => r.json());
+        document.querySelector('#token').textContent = r.token;
+        navigator.clipboard?.writeText(r.token);
+      };
+      document.querySelector('#save').onclick = async () => {
+        const mode = document.querySelector('#mode').value;
+        const blockedJsonPaths = document.querySelector('#paths').value.split('\n').map(s => s.trim()).filter(Boolean);
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, blockedJsonPaths })
+        });
+        await load();
+      };
+      load();
+    </script>
+  </body>
+</html>
