@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-const DATA_DIR = path.resolve(process.cwd(), 'apps/proxytavern/data');
+const __dirname = path.dirname(new URL(import.meta.url).pathname);
+const DATA_DIR = path.resolve(__dirname, '../data');
 const STORE_PATH = path.join(DATA_DIR, 'state.json');
 
 function ensureStore() {
