@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable
+import json
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .core import (
+    Mode,
     ProxyTavern,
     QueueDecisionError,
     SelectorValidationError,
@@ -95,6 +97,59 @@ def _parse_bearer_token(authorization: str | None) -> str:
     return token
 
 
+def _streaming_not_supported_error() -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "message": "Streaming is not supported while queue mode is enabled",
+                "type": "queue_mode_streaming_unsupported",
+            }
+        },
+    )
+
+
+def _completion_to_stream_chunk(response: dict[str, Any]) -> dict[str, Any]:
+    choices_out: list[dict[str, Any]] = []
+    for idx, choice in enumerate(response.get("choices") or []):
+        if not isinstance(choice, dict):
+            continue
+        choice_index = choice.get("index", idx)
+        delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+        if not delta and isinstance(choice.get("message"), dict):
+            message = choice["message"]
+            delta = {
+                key: message[key]
+                for key in ("role", "content", "tool_calls", "function_call")
+                if key in message
+            }
+
+        converted_choice = {
+            "index": choice_index,
+            "delta": delta,
+            "finish_reason": choice.get("finish_reason"),
+        }
+        if "logprobs" in choice:
+            converted_choice["logprobs"] = choice["logprobs"]
+        choices_out.append(converted_choice)
+
+    if not choices_out:
+        choices_out = [{"index": 0, "delta": {}, "finish_reason": "stop"}]
+
+    return {
+        "id": response.get("id", "chatcmpl-proxytavern"),
+        "object": "chat.completion.chunk",
+        "created": response.get("created"),
+        "model": response.get("model"),
+        "choices": choices_out,
+    }
+
+
+def _sse_payloads_from_completion(response: dict[str, Any]) -> list[str]:
+    chunk = _completion_to_stream_chunk(response)
+    return [f"data: {json.dumps(chunk)}\n\n", "data: [DONE]\n\n"]
+
+
 def create_app(
     proxy: ProxyTavern,
     *,
@@ -128,10 +183,30 @@ def create_app(
 
     @v1_router.post("/chat/completions")
     def chat_completions(payload: dict[str, Any]) -> Any:
+        stream = payload.get("stream") is True
+
         try:
-            return proxy.chat_completions(payload)
+            if stream:
+                result = proxy.chat_completions(payload, reject_if_mode=Mode.INLINE)
+            else:
+                result = proxy.chat_completions(payload)
         except UpstreamRelayError as exc:
             return JSONResponse(status_code=exc.status_code, content=exc.body)
+
+        if not stream:
+            return result
+
+        if result.get("status") == "rejected_mode":
+            return _streaming_not_supported_error()
+
+        if result.get("status") != "forwarded":
+            return JSONResponse(
+                status_code=502,
+                content={"error": {"message": "Streaming fallback unavailable", "type": "upstream_stream_unavailable"}},
+            )
+
+        sse_payloads = _sse_payloads_from_completion(result["response"])
+        return StreamingResponse(iter(sse_payloads), media_type="text/event-stream")
 
     @api_router.get("/config")
     def get_config() -> dict[str, Any]:

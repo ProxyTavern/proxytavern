@@ -7,6 +7,23 @@ This increment completes the current Phase B admin API surface for config + toke
 
 ## AC → Evidence
 
+### AC-F1 Inline streaming framing subset (implemented in this milestone)
+- Requirement: inline mode supports `stream=true` on `/v1/chat/completions` using OpenAI-compatible SSE framing and terminal `[DONE]` marker.
+- Evidence tests:
+  - `test_inline_streaming_returns_sse_frames_and_done_marker`
+  - `test_inline_streaming_preserves_done_terminal_frame`
+- Files:
+  - `src/proxytavern/api.py`
+  - `tests/test_http_api.py`
+
+### AC-F2 Queue-mode streaming rejection subset (implemented in this milestone)
+- Requirement: queued mode deterministically rejects `stream=true` with `409` and error type `queue_mode_streaming_unsupported`.
+- Evidence tests:
+  - `test_queue_mode_streaming_is_rejected_with_deterministic_409`
+- Files:
+  - `src/proxytavern/api.py`
+  - `tests/test_http_api.py`
+
 ### AC-S1 Protected Ingress
 - Requirement: missing/invalid token on protected ingress is denied with `401`, and request is not forwarded.
 - Evidence tests:
@@ -122,3 +139,7 @@ This increment completes the current Phase B admin API surface for config + toke
 - `/healthz` remains public.
 - Protected route auth is centralized per router to reduce per-route drift risk.
 - Runtime startup guard in `src/proxytavern/app.py` still prevents disabled auth outside `dev|local|test` and requires bootstrap token when auth is enabled.
+
+### Streaming conversion fidelity note (M1)
+- M1 completion->chunk conversion now preserves per-choice `index`, `finish_reason`, `logprobs`, and maps `message.{role,content,tool_calls,function_call}` into `delta` when upstream returns non-stream JSON.
+- Any top-level completion fields outside chunk schema (for example usage accounting) are not emitted in synthetic chunk frames for this milestone.
