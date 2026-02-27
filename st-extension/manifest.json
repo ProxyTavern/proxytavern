@@ -1,0 +1,12 @@
+{
+  "name": "ProxyTavern Bridge",
+  "display_name": "ProxyTavern Bridge",
+  "author": "ProxyTavern",
+  "version": "0.1.0",
+  "homePage": "https://github.com/example/proxytavern",
+  "loading_order": 20,
+  "js": "index.js",
+  "css": "",
+  "requires": [],
+  "optional": []
+}

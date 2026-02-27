@@ -1,0 +1,26 @@
+services:
+  proxytavern:
+    build:
+      context: .
+    image: proxytavern:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PROXYTAVERN_ENV: ${PROXYTAVERN_ENV:-prod}
+      PROXYTAVERN_AUTH_ENABLED: ${PROXYTAVERN_AUTH_ENABLED:-true}
+      PROXYTAVERN_BEARER_TOKEN: ${PROXYTAVERN_BEARER_TOKEN:?set in .env}
+      PROXYTAVERN_DB_PATH: ${PROXYTAVERN_DB_PATH:-/data/proxytavern.db}
+    ports:
+      - "${PROXYTAVERN_BIND:-127.0.0.1}:${PROXYTAVERN_PORT:-8080}:8080"
+    volumes:
+      - proxytavern-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  proxytavern-data:
