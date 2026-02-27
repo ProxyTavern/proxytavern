@@ -125,3 +125,31 @@ Run all checks against a release-candidate build before go/no-go:
 - Compose live validation on target environment.
 - LAN access + auth validation from external LAN host/client.
 - SillyTavern live extension install/settings verification.
+
+## 8) GitHub PR review-reply helper
+Use `scripts/gh-review-reply.py` to reply to specific review comments/threads with fallback.
+
+Prereqs:
+- `gh` CLI installed/authenticated.
+- Run from repo root or pass `--repo owner/name`.
+
+Examples:
+- List thread/comment IDs for a PR:
+  - `scripts/gh-review-reply.py --pr 123 --target 0 --list --format text`
+- Dry-run mapping only (no post):
+  - `scripts/gh-review-reply.py --pr 123 --target 456789012 --dry-run --format json`
+- Post reply to review comment/thread target:
+  - `scripts/gh-review-reply.py --pr 123 --target 456789012 --body "Thanks, fixed in latest commit."`
+
+Target forms accepted:
+- Numeric review comment ID (`databaseId`)
+- Review comment node ID (`PRRC_...`)
+- Review thread node ID (`PRRT_...`)
+- Discussion URL containing `discussion_r<id>`
+
+Exit codes:
+- `0` success (or dry-run/list success)
+- `2` target not found
+- `3` inline reply failed, PR-level fallback posted
+- `4` inline + fallback both failed
+- `5` runtime/auth/query error
