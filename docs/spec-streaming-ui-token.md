@@ -43,7 +43,11 @@ This spec defines implementation-ready requirements to close all three gaps whil
 ## 3.1 Feature A — API Streaming Support
 
 ### A.1 Functional Behavior
-1. `POST /v1/chat/completions` must accept `stream: true` and return `Content-Type: text/event-stream` in supported mode.
+1. `POST /v1/chat/completions` must accept `stream: true` and return SSE in supported mode with:
+   - `Content-Type: text/event-stream`
+   - `Cache-Control: no-cache, no-transform`
+   - `X-Accel-Buffering: no` (or equivalent proxy buffering disablement)
+   - connection kept flush-friendly for incremental delivery.
 2. In **inline mode**, ProxyTavern must:
    - authenticate,
    - normalize + apply rules,
@@ -91,10 +95,9 @@ When global mode is `queued` and request has `stream=true`:
 - Validation failures: `400` JSON error (non-SSE).
 - Upstream connect failure before first chunk: `502` JSON error.
 - Mid-stream upstream failure after chunks started:
-  - Emit terminal SSE error chunk:
-    - `data: {"error":{"type":"upstream_stream_error","message":"..."}}\n\n`
-  - Then close stream (no further chunks).
-  - If feasible, emit `[DONE]` only when semantics remain valid; otherwise close directly.
+  - Do **not** inject non-chunk schemas (for example data: {"error": ...}) once chunk streaming has begun.
+  - Terminate the stream compatibly by closing the SSE connection; emit [DONE] only if a protocol-compatible terminal chunk sequence can be completed safely.
+  - Record structured server logs/metrics with upstream_stream_error for diagnostics.
 - Client disconnect should cancel upstream stream promptly and mark session event `client_disconnected`.
 
 ### A.6 Observability Requirements
@@ -133,14 +136,17 @@ In Session Detail view add a **Prompt Payloads** panel:
 ### B.3 Data Source API Requirements
 #### New/Adjusted endpoints
 1. `GET /api/sessions?cursor=<>&limit=<>`
-   - Must return session summaries only (no full payload blobs).
-   - Include flags: `has_inbound_payload`, `has_transformed_payload`, `payload_truncated`.
+   - Must preserve current response compatibility for existing list-item fields (including currently shipped payload-related fields) unless a new explicit API version is introduced.
+   - Implementations may add summary-oriented flags (for example `has_inbound_payload`, `has_transformed_payload`, `payload_truncated`) but must not silently remove already-consumed fields in the unversioned contract.
 2. `GET /api/sessions/:id/payloads`
    - Returns metadata and first page/slice:
    - `{ inbound: {json, bytes, redacted_fields, truncated, next_cursor}, transformed: {...} }`
 3. `GET /api/sessions/:id/payloads/:kind?cursor=<>&max_bytes=<>`
    - `kind in {inbound, transformed}`
-   - Returns additional serialized slice if payload exceeds response budget.
+   - Returns a parseable/composable envelope, not arbitrary byte fragments:
+     - `{ kind, encoding: "utf-8", chunk: "...", start, end, total_bytes, next_cursor, done }`
+     - `chunk` is UTF-8 text aligned to JSON token boundaries so each response is independently parseable.
+     - `next_cursor` MUST equal prior `end`; clients reconstruct deterministically by ordered concatenation of `chunk` where `start/end` are contiguous.
 
 ### B.4 Pagination / Performance
 - Session list default `limit=50`, max `200`.
@@ -210,6 +216,7 @@ No browser localStorage/sessionStorage persistence for plaintext token.
 
 ## 4.3 Token Generate Response (UI contract clarification)
 - `POST /api/token/generate` continues returning plaintext token once in response.
+- Response MUST include strict anti-cache headers: `Cache-Control: no-store`, `Pragma: no-cache`, and `Expires: 0`.
 - API must not offer retrieval endpoint for previously generated plaintext token.
 
 ---
