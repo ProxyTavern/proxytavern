@@ -2,7 +2,7 @@
   "name": "ProxyTavern Bridge",
   "display_name": "ProxyTavern Bridge",
   "author": "ProxyTavern",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homePage": "https://github.com/example/proxytavern",
   "loading_order": 20,
   "js": "index.js",
