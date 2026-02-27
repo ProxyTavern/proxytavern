@@ -153,3 +153,25 @@ Exit codes:
 - `3` inline reply failed, PR-level fallback posted
 - `4` inline + fallback both failed
 - `5` runtime/auth/query error
+
+## 9) Web UI config workflow (runtime settings editor)
+
+UI path: `/ui`
+
+1. Open **Config** panel.
+2. Click **Load** implicitly on page open (current effective config is fetched from `GET /api/config`).
+3. Edit runtime-safe fields:
+   - mode (`inline|queued`)
+   - upstream URL
+   - blocked JSONPaths
+   - upstream auth flags/header name (token is never shown; env-only)
+   - retention/privacy (`maxSessions`, payload storage toggle)
+4. Click **Save Config** (calls `POST /api/config`).
+   - Validation errors are shown as actionable toast messages.
+   - Runtime overrides persist and take precedence over bootstrap env/default values.
+5. Click **Reset Overrides** to clear runtime overrides (`POST /api/config/reset`) and fall back to env/default values.
+6. Click **Test Connection** (`POST /api/config/test-connection`) to verify upstream reachability.
+
+Security notes:
+- `/api/config` responses never include plaintext auth tokens.
+- Attempting to set upstream tokens through API is rejected; tokens must come from environment (`UPSTREAM_AUTH_TOKEN`).
