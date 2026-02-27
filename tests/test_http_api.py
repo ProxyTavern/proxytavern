@@ -67,6 +67,53 @@ class HttpApiTests(unittest.TestCase):
         self.assertEqual(body["response"]["object"], "chat.completion")
         self.assertEqual(calls, [payload])
 
+    def test_inline_streaming_returns_sse_frames_and_done_marker(self):
+        verifier = InMemoryTokenVerifier({"test-token"})
+        client, _proxy, _calls = self.make_client(token_verifier=verifier)
+
+        payload = {
+            "model": "gpt-test",
+            "stream": True,
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+        with client.stream("POST", "/v1/chat/completions", json=payload, headers=self.auth_headers()) as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers.get("content-type"), "text/event-stream; charset=utf-8")
+            body = "".join(response.iter_text())
+
+        self.assertIn("data: ", body)
+        self.assertIn('"object": "chat.completion.chunk"', body)
+        self.assertIn("data: [DONE]", body)
+
+    def test_inline_streaming_preserves_done_terminal_frame(self):
+        verifier = InMemoryTokenVerifier({"test-token"})
+        client, _proxy, _calls = self.make_client(token_verifier=verifier)
+
+        payload = {
+            "stream": True,
+            "messages": [{"role": "user", "content": "terminal frame"}],
+        }
+        with client.stream("POST", "/v1/chat/completions", json=payload, headers=self.auth_headers()) as response:
+            body = "".join(response.iter_text())
+
+        self.assertTrue(body.strip().endswith("data: [DONE]"))
+
+    def test_queue_mode_streaming_is_rejected_with_deterministic_409(self):
+        verifier = InMemoryTokenVerifier({"test-token"})
+        client, proxy, calls = self.make_client(token_verifier=verifier)
+        proxy.set_mode("queued")
+
+        payload = {
+            "stream": True,
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+        response = client.post("/v1/chat/completions", json=payload, headers=self.auth_headers())
+
+        self.assertEqual(response.status_code, 409)
+        error = response.json()["error"]
+        self.assertEqual(error["type"], "queue_mode_streaming_unsupported")
+        self.assertEqual(calls, [])
+
     def test_protected_endpoints_reject_missing_token(self):
         verifier = InMemoryTokenVerifier({"test-token"})
         client, _proxy, calls = self.make_client(token_verifier=verifier)
