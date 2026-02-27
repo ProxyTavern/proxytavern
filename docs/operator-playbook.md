@@ -1,3 +1,10 @@
+## 0) Git working guardrails (required)
+- Always work on **devbox** in `~/proxytavern`.
+- Run `scripts/git-preflight.sh` before long implementation runs and again before push/PR.
+- Branch naming convention: `<type>/<short-scope>` (examples: `feat/queue-filtering`, `fix/auth-401`, `chore/git-guardrails`).
+- Optional remote reachability check: `scripts/git-preflight.sh --check-remote`.
+- Before opening a PR, run `scripts/pr-ready.sh` (or `scripts/pr-ready.sh --tests "<test command>"`).
+
 # ProxyTavern Operator Playbook (Phase C)
 
 ## 1) Bring-up (Docker Compose)
