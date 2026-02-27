@@ -4,59 +4,160 @@
     <meta charset="utf-8" />
     <title>ProxyTavern Control Panel</title>
     <style>
-      body { font-family: sans-serif; margin: 24px; }
-      textarea { width: 100%; min-height: 80px; }
+      body { font-family: sans-serif; margin: 24px; max-width: 1100px; }
+      textarea, input, select { width: 100%; min-height: 36px; padding: 6px; box-sizing: border-box; }
+      textarea { min-height: 90px; }
       pre { background: #111; color: #ddd; padding: 12px; overflow: auto; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      button { margin-right: 8px; }
+      .cfg { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 12px 0; }
+      .full { grid-column: 1 / -1; }
+      .actions button { margin-right: 8px; }
+      .toast { margin: 10px 0; padding: 10px; border-radius: 6px; display: none; }
+      .ok { background: #daf5de; color: #134d1c; }
+      .err { background: #ffdede; color: #7a1212; }
+      .muted { color: #666; font-size: 12px; }
+      code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; }
     </style>
   </head>
   <body>
     <h1>ProxyTavern</h1>
-    <p>MVP control panel</p>
+    <p>Control panel</p>
+
     <div>
       <button id="gen">Generate API Token</button>
       <code id="token"></code>
     </div>
-    <h3>Mode</h3>
-    <select id="mode">
-      <option value="inline">inline</option>
-      <option value="queued">queued</option>
-    </select>
-    <h3>Blocked JSONPaths (one per line)</h3>
-    <textarea id="paths" placeholder="$.messages[0].content"></textarea>
-    <div><button id="save">Save Config</button></div>
+
+    <h2>Config</h2>
+    <div id="toast" class="toast"></div>
+    <div class="cfg">
+      <label>
+        Mode
+        <select id="mode">
+          <option value="inline">inline</option>
+          <option value="queued">queued</option>
+        </select>
+      </label>
+      <label>
+        Upstream URL
+        <input id="upstreamUrl" placeholder="http://127.0.0.1:5000/v1/chat/completions" />
+      </label>
+      <label class="full">
+        Blocked JSONPaths (one per line)
+        <textarea id="paths" placeholder="$.messages[0].content"></textarea>
+      </label>
+      <label>
+        Upstream auth header
+        <input id="authHeaderName" placeholder="Authorization" />
+      </label>
+      <label>
+        <input type="checkbox" id="authEnabled" /> Enable upstream auth header injection
+        <div class="muted">Token is never shown in UI; set <code>UPSTREAM_AUTH_TOKEN</code> in env.</div>
+      </label>
+      <label>
+        Session retention limit
+        <input type="number" id="maxSessions" min="10" max="5000" step="1" />
+      </label>
+      <label>
+        <input type="checkbox" id="storePayloads" /> Store request/response payloads (disable for privacy)
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="save">Save Config</button>
+      <button id="reset">Reset Overrides</button>
+      <button id="test">Test Connection</button>
+    </div>
+
     <h3>Recent Sessions</h3>
     <div id="sessions"></div>
+
     <script>
+      const $ = (s) => document.querySelector(s);
+
+      function toast(message, ok = true) {
+        const el = $(#toast);
+        el.className = `toast ${ok ? ok : err}`;
+        el.textContent = message;
+        el.style.display = block;
+        clearTimeout(window.__toastT);
+        window.__toastT = setTimeout(() => { el.style.display = none; }, 3200);
+      }
+
+      function cfgFromForm() {
+        return {
+          mode: $(#mode).value,
+          upstreamUrl: $(#upstreamUrl).value.trim(),
+          blockedJsonPaths: $(#paths).value.split(n).map(s => s.trim()).filter(Boolean),
+          upstreamAuth: {
+            enabled: $(#authEnabled).checked,
+            headerName: $(#authHeaderName).value.trim() || Authorization
+          },
+          retention: {
+            maxSessions: Number($(#maxSessions).value),
+            storePayloads: $(#storePayloads).checked
+          }
+        };
+      }
+
+      function applyConfig(cfg) {
+        $(#mode).value = cfg.mode || inline;
+        $(#upstreamUrl).value = cfg.upstreamUrl || ;
+        $(#paths).value = (cfg.blockedJsonPaths || []).join(n);
+        $(#authEnabled).checked = !!cfg.upstreamAuth?.enabled;
+        $(#authHeaderName).value = cfg.upstreamAuth?.headerName || Authorization;
+        $(#maxSessions).value = cfg.retention?.maxSessions ?? 200;
+        $(#storePayloads).checked = cfg.retention?.storePayloads !== false;
+      }
+
       async function load() {
-        const cfg = await fetch('/api/config').then(r => r.json());
-        document.querySelector('#mode').value = cfg.mode || 'inline';
-        document.querySelector('#paths').value = (cfg.blockedJsonPaths || []).join('\n');
-        const sessions = await fetch('/api/sessions').then(r => r.json());
-        document.querySelector('#sessions').innerHTML = sessions.slice(0,5).map(s => `
+        const cfg = await fetch(/api/config, { cache: no-store }).then(r => r.json());
+        applyConfig(cfg);
+
+        const sessions = await fetch(/api/sessions).then(r => r.json());
+        $(#sessions).innerHTML = sessions.slice(0, 5).map(s => `
           <div class="row">
             <pre>${JSON.stringify(s.incoming, null, 2)}</pre>
             <pre>${JSON.stringify(s.transformed, null, 2)}</pre>
           </div>
-        `).join('');
+        `).join();
       }
-      document.querySelector('#gen').onclick = async () => {
-        const r = await fetch('/api/token/generate', { method: 'POST' }).then(r => r.json());
-        document.querySelector('#token').textContent = r.token;
+
+      $(#gen).onclick = async () => {
+        const r = await fetch(/api/token/generate, { method: POST }).then(r => r.json());
+        $(#token).textContent = r.token;
         navigator.clipboard?.writeText(r.token);
+        toast(New token generated and copied to clipboard.);
       };
-      document.querySelector('#save').onclick = async () => {
-        const mode = document.querySelector('#mode').value;
-        const blockedJsonPaths = document.querySelector('#paths').value.split('\n').map(s => s.trim()).filter(Boolean);
-        await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode, blockedJsonPaths })
+
+      $(#save).onclick = async () => {
+        const payload = cfgFromForm();
+        const resp = await fetch(/api/config, {
+          method: POST,
+          headers: { Content-Type: application/json },
+          body: JSON.stringify(payload)
         });
+        const body = await resp.json();
+        if (!resp.ok) return toast(body.message || Config save failed, false);
+        applyConfig(body);
+        toast(Config saved. Runtime overrides now take precedence over env defaults.);
         await load();
       };
-      load();
+
+      $(#reset).onclick = async () => {
+        await fetch(/api/config/reset, { method: POST });
+        toast(Runtime overrides reset to env/default values.);
+        await load();
+      };
+
+      $(#test).onclick = async () => {
+        const resp = await fetch(/api/config/test-connection, { method: POST });
+        const body = await resp.json();
+        if (!resp.ok || !body.ok) return toast(`Connection test failed: ${body.message || body.status}`, false);
+        toast(`Connection OK (${body.status}) to ${body.upstreamUrl}`);
+      };
+
+      load().catch((err) => toast(`Load failed: ${err.message}`, false));
     </script>
   </body>
 </html>
