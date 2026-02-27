@@ -139,3 +139,7 @@ This increment completes the current Phase B admin API surface for config + toke
 - `/healthz` remains public.
 - Protected route auth is centralized per router to reduce per-route drift risk.
 - Runtime startup guard in `src/proxytavern/app.py` still prevents disabled auth outside `dev|local|test` and requires bootstrap token when auth is enabled.
+
+### Streaming conversion fidelity note (M1)
+- M1 completion->chunk conversion now preserves per-choice `index`, `finish_reason`, `logprobs`, and maps `message.{role,content,tool_calls,function_call}` into `delta` when upstream returns non-stream JSON.
+- Any top-level completion fields outside chunk schema (for example usage accounting) are not emitted in synthetic chunk frames for this milestone.

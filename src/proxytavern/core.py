@@ -559,7 +559,16 @@ class ProxyTavern:
     def get_session(self, session_id: str) -> Session:
         return self.state.get_session(session_id)
 
-    def chat_completions(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def chat_completions(
+        self,
+        payload: dict[str, Any],
+        *,
+        reject_if_mode: Mode | None = None,
+    ) -> dict[str, Any]:
+        current_mode = self.mode
+        if reject_if_mode is not None and current_mode != reject_if_mode:
+            return {"status": "rejected_mode", "mode": current_mode.value}
+
         session_id = str(uuid.uuid4())
         transformed = self._transform(payload)
         now = self._utc_now_iso()
@@ -573,7 +582,7 @@ class ProxyTavern:
         )
         self.state.upsert_session(session)
 
-        if self.mode == Mode.INLINE:
+        if current_mode == Mode.INLINE:
             response = self._call_upstream(transformed)
             session.response = deepcopy(response)
             session.status = SessionStatus.FORWARDED
