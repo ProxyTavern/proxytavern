@@ -47,7 +47,7 @@ Scope: local code/tests/docs only (no deploy, no external side effects)
 ## Exact test command + result
 Command:
 ```bash
-cd /home/dev/.openclaw/workspace-bmad/projects/proxytavern && . .venv/bin/activate && pytest -q
+cd ~/proxytavern && . .venv/bin/activate && pytest -q
 ```
 Result:
 - `39 passed, 70 subtests passed in 3.94s`
