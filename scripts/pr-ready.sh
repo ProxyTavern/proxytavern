@@ -4,6 +4,8 @@ set -euo pipefail
 TEST_CMD=""
 CHECK_REMOTE=false
 SKIP_TESTS=false
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
 usage() {
   cat <<USAGE
@@ -46,9 +48,10 @@ if [[ "$CHECK_REMOTE" == "true" ]]; then
   PREFLIGHT_ARGS+=(--check-remote)
 fi
 
-scripts/git-preflight.sh "${PREFLIGHT_ARGS[@]}"
+"${SCRIPT_DIR}/git-preflight.sh" "${PREFLIGHT_ARGS[@]}"
 
 run_default_tests() {
+  cd "${REPO_ROOT}"
   if [[ -x .venv/bin/pytest ]]; then
     echo "[INFO] Running tests: .venv/bin/pytest -q"
     .venv/bin/pytest -q
@@ -60,6 +63,8 @@ run_default_tests() {
     return 1
   fi
 }
+
+cd "${REPO_ROOT}"
 
 if [[ "$SKIP_TESTS" == "true" ]]; then
   echo "[WARN] Skipping tests by request (--skip-tests)."

@@ -50,7 +50,14 @@ if ! git remote get-url origin >/dev/null 2>&1; then
 fi
 
 origin_url="$(git remote get-url origin)"
-if [[ "$origin_url" != "$CANONICAL_ORIGIN" ]]; then
+origin_url_https="${origin_url}"
+if [[ "${origin_url}" =~ ^git@github.com:(.+)$ ]]; then
+  origin_url_https="https://github.com/${BASH_REMATCH[1]}"
+fi
+if [[ "${origin_url_https}" =~ ^https://github.com/(.+)$ ]] && [[ "${origin_url_https}" != *.git ]]; then
+  origin_url_https="${origin_url_https}.git"
+fi
+if [[ "$origin_url_https" != "$CANONICAL_ORIGIN" ]]; then
   echo "[FAIL] origin URL mismatch." >&2
   echo "       expected: ${CANONICAL_ORIGIN}" >&2
   echo "       actual:   ${origin_url}" >&2
